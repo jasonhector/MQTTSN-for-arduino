@@ -1,0 +1,26 @@
+
+
+//FIXME line 580 and 581 - need to strcpy into the topicTable.name but const_cast compiles but hangs
+//FIXME PUB and SUB at same/similar time causes arduino to hang!!
+//TODO clean up the mqttsn lib with cleaner API
+//TODO 'connect' mqttsn and mote libs
+//TODO arduino watchdog for mqttsn lib lockup
+
+---------------------
+DONE:
+-----------------
+//TODO Implement the poll with callback service - done
+//TODO implement required handlers
+//TODO  publish handler -> has callback to sketch to return the data
+
+
+
+SOCAT TO USE FOR DEBUG:
+
+sudo socat -x -v -t 0.01 /dev/ttyACM0,raw,echo=0,b115200 UDP4:127.0.0.1:1884
+sudo socat -x -v /dev/ttyACM0,raw,echo=0,b115200 UDP4:127.0.0.1:1884
+
+
+socat -x -v TCP-LISTEN:1887 UDP4:127.0.0.1:1884
+sudo socat -x -v /dev/ttyACM0,echo=0,b115200 TCP:127.0.0.1:1887,igncr=1
+
