@@ -2,7 +2,7 @@ Mqttsn Library
 
 MQTT-SN library for Arduino that has been "forked" from http://bitbucket.org/MerseyViking/mqtt-sn and https://github.com/boriz/MQTT-SN-Arduino. Sample sketches for publishing and subscribing are provided
 
-You will need the Mote library for Arduino to get the example sketches going- this provides Remote Terminal Unit [RTU] functionality to arduino with features like analog deadbands, binary debounce, pulse and latch controls, etc. The Mote protocol is an application layer protocol to the MQTTSN libraries and has been defined in the this repos wiki
+You will need the Mote library https://github.com/jasonhector/Mote-for-arduino for Arduino to get the example sketches going- this provides Remote Terminal Unit [RTU] functionality to arduino with features like analog deadbands, binary debounce, pulse and latch controls, etc. The Mote protocol is an application layer protocol to the MQTTSN libraries and has been defined in the this repos wiki
 
 
 The Really Small Message Broker [RSMB] is the only broker currently that supports both Mqtt and Mqttsn. The config is in the wiki.
