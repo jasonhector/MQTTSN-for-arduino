@@ -59,7 +59,9 @@ public:
 #ifdef USE_RF12
     void parse_rf12();
 #endif
-
+#ifdef USE_LPL_RF69
+    void parse_lpl_rf69();
+#endif
     void searchgw(const uint8_t radius);
     void connect(const uint8_t flags, const uint16_t duration, const char* client_id);
     void willtopic(const uint8_t flags, const char* will_topic, const bool update = false);

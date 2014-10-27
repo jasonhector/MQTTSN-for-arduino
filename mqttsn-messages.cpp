@@ -23,9 +23,12 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 */
-
+//serial interface for mqttsn
 //#define USE_SERIAL 1
+//for use with Jeelib's RF12 radios
 #define USE_RF12 1
+//for use with LowPowerLab's RF69 radios
+//#define USE_LPL_RF69
 
 //#include <Arduino.h>
 
@@ -36,8 +39,13 @@ THE SOFTWARE.
 #include "JeeLib.h" 
 #endif
 
-#if !(USE_RF12 || USE_SERIAL)
-#error "You really should define one or both of USE_RF12 or USE_SERIAL."
+#ifdef USE_LPL_RF69
+#include "RF69.h"
+#include "SPIFlash.h"
+#endif
+
+#if !(USE_RF12 || USE_SERIAL || USE_LPL_RF69)
+#error "You really should define one of the USE_X ie USE_RF12, USE_SERIAL, USE_LPL_RF69"
 #endif
 
 MQTTSN::MQTTSN() :
@@ -56,7 +64,6 @@ DbgSer(5,6)
     memset(message_buffer, 0, MAX_BUFFER_SIZE);
     memset(response_buffer, 0, MAX_BUFFER_SIZE);
     DbgSer.begin(115200);
-    //rf12_initialize(10, RF12_433MHZ, 210);
 }
 
 MQTTSN::~MQTTSN() {
@@ -70,6 +77,9 @@ void MQTTSN::poll(){
 	#ifdef USE_RF12
 	parse_rf12();
 	#endif
+    #ifdef USE_LPL_RF69
+    parse_lpl_rf69();
+    #endif
 }
 
 bool MQTTSN::wait_for_response() {
@@ -172,6 +182,38 @@ void MQTTSN::parse_rf12() {
 			dispatch();
 		}
 	}
+}
+#endif
+
+#ifdef USE_LPL_RF69
+void MQTTSN::parse_lpl_rf69() {
+    DbgSer.println(F(" mqttsn-messages::parse_lpl_rf69: >>> "));
+    
+    if(radio.receiveDone()){
+        DbgSer.print(F(" mqttsn-messages::parse_lpl_rf69: recvDone()=1"));
+        //DbgSer.print(F(" mqttsn-messages::parse_lpl_rf69: rf69 data = "));
+        //for (int i=0;i<rf12_len;i++){
+        //  DbgSer.print(rf12_data[i],HEX);
+        //  DbgSer.print(F(" "));
+        //}
+        //DbgSer.println(F(" "));
+        if(rf12_crc == 0 ){
+            //DbgSer.println(F(" mqttsn-messages::parse_rf12: crc free RF data received! "));
+            DbgSer.print(F(" mqttsn-messages::parse_rf12: rf12 data = "));
+            for (int i=0;i<radio.DATALEN;i++){
+                DbgSer.print(radio.Data[i],HEX);
+                DbgSer.print(F(" "));
+            }
+            DbgSer.println(F(" "));
+            memcpy(response_buffer, (const void*)radio.Data, radio.RF69_MAX_DATA_LEN  < MAX_BUFFER_SIZE ? radio.RF69_MAX_DATA_LEN : MAX_BUFFER_SIZE);
+            if (radio.ACKRequested()){
+                byte theNodeID = radio.SENDERID;
+                radio.sendACK();
+                DbgSer.println(F(" Sending Rf69 ACK"));
+                }
+            dispatch();
+        }
+    }
 }
 #endif
 
@@ -280,6 +322,23 @@ void MQTTSN::dispatch() {
 
 void MQTTSN::send_message() {
     message_header* hdr = reinterpret_cast<message_header*>(message_buffer);
+#ifdef USE_LPL_RF69
+   int i=0;
+    while (!radio.canSend()){//} && i<10) {
+        DbgSer.print(F("mqttsn-messages:advertise_handler: radio.canSend() = "));
+        DbgSer.print(radio.canSend());
+        DbgSer.print(F(" "));
+        //rf12_recvDone();
+        //i++;
+        delay(32);
+        //Sleepy::loseSomeTime(32);
+    }
+    //DbgSer.println(F(" "));
+    radio.sendWithRetry(_gateway_id, message_buffer, hdr->length);
+    //rf12_sendWait(2);
+    //rf12_sleep(RF12_SLEEP);
+    //doubleFlashLed(9, 20);
+#endif
 
 #ifdef USE_RF12
 	//rf12_sleep(RF12_WAKEUP);
