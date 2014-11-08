@@ -26,9 +26,9 @@ THE SOFTWARE.
 //serial interface for mqttsn
 //#define USE_SERIAL 1
 //for use with Jeelib's RF12 radios
-#define USE_RF12 1
+//#define USE_RF12 1
 //for use with LowPowerLab's RF69 radios
-//#define USE_LPL_RF69
+#define USE_LPL_RF69 1
 
 //#include <Arduino.h>
 
@@ -64,6 +64,9 @@ DbgSer(5,6)
     memset(message_buffer, 0, MAX_BUFFER_SIZE);
     memset(response_buffer, 0, MAX_BUFFER_SIZE);
     DbgSer.begin(115200);
+    #ifdef USE_LPL_RF69
+        RFM69 radio;
+    #endif
 }
 
 MQTTSN::~MQTTSN() {
@@ -197,7 +200,7 @@ void MQTTSN::parse_lpl_rf69() {
         //  DbgSer.print(F(" "));
         //}
         //DbgSer.println(F(" "));
-        if(rf12_crc == 0 ){
+        //if(rf12_crc == 0 ){
             //DbgSer.println(F(" mqttsn-messages::parse_rf12: crc free RF data received! "));
             DbgSer.print(F(" mqttsn-messages::parse_rf12: rf12 data = "));
             for (int i=0;i<radio.DATALEN;i++){
@@ -212,7 +215,7 @@ void MQTTSN::parse_lpl_rf69() {
                 DbgSer.println(F(" Sending Rf69 ACK"));
                 }
             dispatch();
-        }
+        //}
     }
 }
 #endif
