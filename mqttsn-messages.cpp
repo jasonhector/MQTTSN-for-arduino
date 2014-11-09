@@ -40,8 +40,9 @@ THE SOFTWARE.
 #endif
 
 #ifdef USE_LPL_RF69
-#include "RF69.h"
+#include "RFM69.h"
 #include "SPIFlash.h"
+RFM69 radio;
 #endif
 
 #if !(USE_RF12 || USE_SERIAL || USE_LPL_RF69)
@@ -64,9 +65,9 @@ DbgSer(5,6)
     memset(message_buffer, 0, MAX_BUFFER_SIZE);
     memset(response_buffer, 0, MAX_BUFFER_SIZE);
     DbgSer.begin(115200);
-    #ifdef USE_LPL_RF69
-        RFM69 radio;
-    #endif
+//    #ifdef USE_LPL_RF69
+//        RFM69 radio;
+//    #endif
 }
 
 MQTTSN::~MQTTSN() {
@@ -204,11 +205,12 @@ void MQTTSN::parse_lpl_rf69() {
             //DbgSer.println(F(" mqttsn-messages::parse_rf12: crc free RF data received! "));
             DbgSer.print(F(" mqttsn-messages::parse_rf12: rf12 data = "));
             for (int i=0;i<radio.DATALEN;i++){
-                DbgSer.print(radio.Data[i],HEX);
+                DbgSer.print(radio.DATA[i],HEX);
                 DbgSer.print(F(" "));
             }
             DbgSer.println(F(" "));
-            memcpy(response_buffer, (const void*)radio.Data, radio.RF69_MAX_DATA_LEN  < MAX_BUFFER_SIZE ? radio.RF69_MAX_DATA_LEN : MAX_BUFFER_SIZE);
+          //memcpy(response_buffer, (const void*)radio.DATA, radio.RF69_MAX_DATA_LEN < MAX_BUFFER_SIZE ? radio.RF69_MAX_DATA_LEN : MAX_BUFFER_SIZE);
+            memcpy(response_buffer, (const void*)radio.DATA, 61);//< MAX_BUFFER_SIZE ? radio.RF69_MAX_DATA_LEN : MAX_BUFFER_SIZE);
             if (radio.ACKRequested()){
                 byte theNodeID = radio.SENDERID;
                 radio.sendACK();
