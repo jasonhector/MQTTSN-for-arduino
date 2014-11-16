@@ -23,7 +23,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 */
-//#define USE_SERIAL 1
+#define USE_LPL_RF69 1
 
 #ifndef __MQTTSN_MESSAGES_H__
 #define __MQTTSN_MESSAGES_H__
@@ -31,6 +31,13 @@ THE SOFTWARE.
 //#include "Arduino.h"
 //#include "WString.h"
 #include "SoftwareSerial.h"
+#ifdef USE_LPL_RF69
+    #include "SPI.h"
+    #include "SPIFlash.h"
+    #include "RFM69.h"
+#endif
+
+
 
 //typedef void (*mqttsnMessagesCallbackT) (uint8_t* response);
 typedef void (*mqttsnPubHandlerCallbackT) (const char* topic,const char* payload);
@@ -60,7 +67,11 @@ public:
     void parse_rf12();
 #endif
 #ifdef USE_LPL_RF69
+    //#include "SPI.h"
+   //#include "SPIFlash.h"
+    //#include "RFM69.h"
     void parse_lpl_rf69();
+    void setRadioArgs(byte freqBand, byte ID, byte networkID, const char* encryptKey);
 #endif
     void searchgw(const uint8_t radius);
     void connect(const uint8_t flags, const uint16_t duration, const char* client_id);
@@ -98,6 +109,9 @@ protected:
 	bool waiting_for_response;
     SoftwareSerial DbgSer;
     uint16_t slow;
+    #ifdef USE_LPL_RF69
+        RFM69 radio;
+    #endif
     
     virtual void advertise_handler(const msg_advertise* msg);
     virtual void gwinfo_handler(const msg_gwinfo* msg);

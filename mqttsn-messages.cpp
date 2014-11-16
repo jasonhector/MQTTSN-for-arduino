@@ -40,9 +40,10 @@ THE SOFTWARE.
 #endif
 
 #ifdef USE_LPL_RF69
-#include "RFM69.h"
+#include "SPI.h"
 #include "SPIFlash.h"
-RFM69 radio;
+#include "RFM69.h"
+//RFM69 radio;
 #endif
 
 #if !(USE_RF12 || USE_SERIAL || USE_LPL_RF69)
@@ -59,15 +60,17 @@ _response_timer(0),
 _response_retries(0),
 slow(10),
 DbgSer(5,6)
-
 {
     memset(topic_table, 0, sizeof(topic) * MAX_TOPICS);
     memset(message_buffer, 0, MAX_BUFFER_SIZE);
     memset(response_buffer, 0, MAX_BUFFER_SIZE);
     DbgSer.begin(115200);
-//    #ifdef USE_LPL_RF69
-//        RFM69 radio;
-//    #endif
+    #ifdef USE_LPL_RF69
+        //RFM69 radio;
+        //radio.setAddress(11);
+        //radio((byte)10,(byte)2,(bool)false,(byte)0);
+    #endif
+    
 }
 
 MQTTSN::~MQTTSN() {
@@ -191,7 +194,10 @@ void MQTTSN::parse_rf12() {
 
 #ifdef USE_LPL_RF69
 void MQTTSN::parse_lpl_rf69() {
+    //flashLed(9,50);
     DbgSer.println(F(" mqttsn-messages::parse_lpl_rf69: >>> "));
+    DbgSer.print(F(" mqttsn-messages::parse_lpl_rf69: radio.receiveDone()= "));
+    DbgSer.println(radio.receiveDone());
     
     if(radio.receiveDone()){
         DbgSer.print(F(" mqttsn-messages::parse_lpl_rf69: recvDone()=1"));
@@ -203,7 +209,7 @@ void MQTTSN::parse_lpl_rf69() {
         //DbgSer.println(F(" "));
         //if(rf12_crc == 0 ){
             //DbgSer.println(F(" mqttsn-messages::parse_rf12: crc free RF data received! "));
-            DbgSer.print(F(" mqttsn-messages::parse_rf12: rf12 data = "));
+            DbgSer.print(F(" mqttsn-messages::parse_rf69: rf69 data = "));
             for (int i=0;i<radio.DATALEN;i++){
                 DbgSer.print(radio.DATA[i],HEX);
                 DbgSer.print(F(" "));
@@ -219,6 +225,13 @@ void MQTTSN::parse_lpl_rf69() {
             dispatch();
         //}
     }
+}
+
+void MQTTSN::setRadioArgs(byte freqBand, byte ID, byte networkID, const char* encryptKey){
+    DbgSer.println(F("mqttsn-messages:Initialising RF69...")); 
+    radio.initialize(freqBand, ID, networkID);
+    radio.encrypt(encryptKey);
+    DbgSer.println(F("mqttsn-messages:RF69 init done")); 
 }
 #endif
 
@@ -328,21 +341,21 @@ void MQTTSN::dispatch() {
 void MQTTSN::send_message() {
     message_header* hdr = reinterpret_cast<message_header*>(message_buffer);
 #ifdef USE_LPL_RF69
-   int i=0;
-    while (!radio.canSend()){//} && i<10) {
-        DbgSer.print(F("mqttsn-messages:advertise_handler: radio.canSend() = "));
-        DbgSer.print(radio.canSend());
-        DbgSer.print(F(" "));
+   //int i=0;
+   // while (!radio.canSend()){//} && i<10) {
+        //DbgSer.print(F("mqttsn-messages:send_message:radio.canSend() = "));
+        //DbgSer.print(radio.canSend());
+        //DbgSer.print(F("."));
         //rf12_recvDone();
         //i++;
-        delay(32);
-        //Sleepy::loseSomeTime(32);
-    }
+        //delay(32);
+        //doubleFlashLed(9,50);
+    //}
     //DbgSer.println(F(" "));
     radio.sendWithRetry(_gateway_id, message_buffer, hdr->length);
     //rf12_sendWait(2);
     //rf12_sleep(RF12_SLEEP);
-    //doubleFlashLed(9, 20);
+    doubleFlashLed(9, 30);
 #endif
 
 #ifdef USE_RF12
@@ -992,14 +1005,7 @@ void MQTTSN::publish_(char* topic,char* payload, int payloadLength, uint8_t flag
     poll();
 }
 
-#ifdef USE_RF12
-void MQTTSN::delay_(uint16_t ms){
-	//Sleepy::loseSomeTime(ms);
-	delay(ms);
-} 
-#endif
-#ifdef USE_SERIAL
 void MQTTSN::delay_(uint16_t ms){
 	delay(ms);
-} 
-#endif
+}
+
