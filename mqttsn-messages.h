@@ -30,19 +30,57 @@ THE SOFTWARE.
 #include "mqttsn.h"
 //#include "Arduino.h"
 //#include "WString.h"
-#include "SoftwareSerial.h"
+//#include "SoftwareSerial.h"
 #ifdef USE_LPL_RF69
     #include "SPI.h"
     #include "SPIFlash.h"
     #include "RFM69.h"
 #endif
 
+//#define USE_DBG_SOFT
+#define USE_DBG_UART
+
+#define SERIAL_BAUD   115200
+
+#ifdef USE_DBG_SOFT
+  #include <SoftwareSerial.h>
+  #define DBG_RX 5
+  #define DBG_TX 6
+  #define dbg(input)   {DbgSer.print(input); delay(1);}
+  #define dbgln(input) {DbgSer.println(input); delay(1);}
+  #define dbgH(input, hex){DbgSer.print(input, hex); delay(1);}
+  #define dbglnH(input, hex){DbgSer.println(input, hex); delay(1);}
+  #define dbgF(input)   {DbgSer.print(F(input)); delay(1);}
+  #define dbglnF(input) {DbgSer.println(F(input)); delay(1);}
+#else
+  #define dbg(input);
+  #define dbgln(input);
+  #define dbgF(input);
+  #define dbglnF(input);
+  #define dbgH(input,hex);
+  #define dbglnH(input,hex);
+#endif
+#ifdef USE_DBG_UART
+  #define dbg(input)   {Serial.print(input); delay(1);}
+  #define dbgln(input) {Serial.println(input); delay(1);}
+  #define dbgH(input, hex){Serial.print(input, hex); delay(1);}
+  #define dbglnH(input, hex){Serial.println(input, hex); delay(1);}
+  #define dbgF(input)   {Serial.print(F(input)); delay(1);}
+  #define dbglnF(input) {Serial.println(F(input)); delay(1);}
+#else
+  #define dbg(input);
+  #define dbgln(input);
+  #define dbgF(input);
+  #define dbglnF(input);
+  #define dbgH(input,hex);
+  #define dbglnH(input,hex);
+#endif
 
 
 //typedef void (*mqttsnMessagesCallbackT) (uint8_t* response);
 typedef void (*mqttsnPubHandlerCallbackT) (const char* topic,const char* payload);
 
-#define MAX_TOPICS 10
+#define MAX_TOPICS 20
 #define MAX_BUFFER_SIZE 66
 
 class MQTTSN {
@@ -67,9 +105,6 @@ public:
     void parse_rf12();
 #endif
 #ifdef USE_LPL_RF69
-    //#include "SPI.h"
-   //#include "SPIFlash.h"
-    //#include "RFM69.h"
     void parse_lpl_rf69();
     void setRadioArgs(byte freqBand, byte ID, byte networkID, const char* encryptKey);
 #endif
@@ -107,7 +142,9 @@ public:
 protected:
 
 	bool waiting_for_response;
-    SoftwareSerial DbgSer;
+    #ifdef USE_DBG_SOFT
+        SoftwareSerial DbgSer;
+    #endif
     uint16_t slow;
     #ifdef USE_LPL_RF69
         RFM69 radio;
@@ -167,6 +204,31 @@ private:
     uint32_t _response_timer;
     uint8_t _response_retries;
 
+};
+
+
+/// The millisecond timer can be used for timeouts up to 60000 milliseconds.
+/// Setting the timeout to zero disables the timer.
+///
+/// * for periodic use, poll the timer object with "if (timer.poll(123)) ..."
+/// * for one-shot use, call "timer.set(123)" and poll as "if (timer.poll())"
+
+class MilliTimer {
+    word next;
+    byte armed;
+public:
+    MilliTimer () : armed (0) {}
+    
+    /// poll until the timer fires
+    /// @param ms Periodic repeat rate of the time, omit for a one-shot timer.
+    byte poll(word ms =0);
+    /// Return the number of milliseconds before the timer will fire
+    word remaining() const;
+    /// Returns true if the timer is not armed
+    byte idle() const { return !armed; }
+    /// set the one-shot timeout value
+    /// @param ms Timeout value. Timer stops once the timer has fired.
+    void set(word ms);
 };
 
 #endif

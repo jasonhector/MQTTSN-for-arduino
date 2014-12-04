@@ -29,20 +29,19 @@ THE SOFTWARE.
 //#define USE_RF12 1
 //for use with LowPowerLab's RF69 radios
 #define USE_LPL_RF69 1
-
 //#include <Arduino.h>
 
 #include "mqttsn-messages.h"
 //#include "mqttsn.h"
 
 #ifdef USE_RF12
-#include "JeeLib.h" 
+//#include "JeeLib.h" 
 #endif
 
 #ifdef USE_LPL_RF69
-#include "SPI.h"
-#include "SPIFlash.h"
-#include "RFM69.h"
+//#include "SPI.h"
+//#include "SPIFlash.h"
+//#include "RFM69.h"
 //RFM69 radio;
 #endif
 
@@ -55,16 +54,24 @@ waiting_for_response(false),
 _connected(false),
 _message_id(0),
 topic_count(0),
-_gateway_id(0),
-_response_timer(0),
-_response_retries(0),
-slow(10),
-DbgSer(5,6)
+_gateway_id(1),
+_response_timer(30),
+_response_retries(3),
+slow(20),       //assume the ack time for messages is 10-15 ms, so we wait 20ms before polling for rx messages
+#ifdef USE_DBG_SOFT
+    DbgSer(DBG_RX, DBG_TX),
+#endif
+radio()
 {
     memset(topic_table, 0, sizeof(topic) * MAX_TOPICS);
     memset(message_buffer, 0, MAX_BUFFER_SIZE);
     memset(response_buffer, 0, MAX_BUFFER_SIZE);
-    DbgSer.begin(115200);
+    #ifdef USE_DBG_SOFT
+        DbgSer.begin(SERIAL_BAUD);
+    #endif
+    #ifdef USE_DBG_UART
+        Serial.begin(SERIAL_BAUD);
+    #endif
     #ifdef USE_LPL_RF69
         //RFM69 radio;
         //radio.setAddress(11);
@@ -136,7 +143,7 @@ uint16_t MQTTSN::find_topic_id(const char* name, uint8_t* index) {
 
 #ifdef USE_SERIAL
 void MQTTSN::parse_stream() {
-	//DbgSer.println("mqttsn-messages:parse_stream:");
+	//dbgln("mqttsn-messages:parse_stream:");
 	//Serial.println("mqttsn-messages:parse_stream: [HERE]");
     //doubleFlashLed(13,50);
     if (Serial.available() > 0) {
@@ -159,30 +166,30 @@ void MQTTSN::parse_stream() {
 
 #ifdef USE_RF12
 void MQTTSN::parse_rf12() {
-	//DbgSer.println(F(" mqttsn-messages::parse_rf12: >>> "));
+	//dbgln(F(" mqttsn-messages::parse_rf12: >>> "));
 	if (rf12_recvDone()){//&& (rf12_hdr & RF12_HDR_CTL) == 0) {
-		DbgSer.print(F(" mqttsn-messages::parse_rf12: recvDone()=1     rf12_crc="));
-		//DbgSer.print(F(" mqttsn-messages::parse_rf12: rf12_crc = "));
-		DbgSer.println(rf12_crc);
-		//DbgSer.print(F(" mqttsn-messages::parse_rf12: rf12 data = "));
+		dbgF(" mqttsn-messages::parse_rf12: recvDone()=1     rf12_crc=");
+		//dbg(F(" mqttsn-messages::parse_rf12: rf12_crc = "));
+		dbgln(rf12_crc);
+		//dbg(F(" mqttsn-messages::parse_rf12: rf12 data = "));
 		//for (int i=0;i<rf12_len;i++){
-		//	DbgSer.print(rf12_data[i],HEX);
-		//	DbgSer.print(F(" "));
+		//	dbg(rf12_data[i],HEX);
+		//	dbg(F(" "));
 		//}
-		//DbgSer.println(F(" "));
+		//dbgln(F(" "));
 		if(rf12_crc == 0 ){
-			//DbgSer.println(F(" mqttsn-messages::parse_rf12: crc free RF data received! "));
-			DbgSer.print(F(" mqttsn-messages::parse_rf12: rf12 data = "));
+			//dbgln(F(" mqttsn-messages::parse_rf12: crc free RF data received! "));
+			dbgF(" mqttsn-messages::parse_rf12: rf12 data = ");
 			for (int i=0;i<rf12_len;i++){
-				DbgSer.print(rf12_data[i],HEX);
-				DbgSer.print(F(" "));
+				dbg(rf12_data[i],HEX);
+				dbgF(" ");
 			}
-			DbgSer.println(F(" "));
-			DbgSer.print(F(" mqttsn-messages::parse_rf12: rf12 hdr = "));
-			DbgSer.println(rf12_hdr);
+			dbglnF(" ");
+			dbgF(" mqttsn-messages::parse_rf12: rf12 hdr = ");
+			dbgln(rf12_hdr);
 			memcpy(response_buffer, (const void*)rf12_data, RF12_MAXDATA < MAX_BUFFER_SIZE ? RF12_MAXDATA : MAX_BUFFER_SIZE);
 				if (RF12_WANTS_ACK) {
-					DbgSer.println(F(" Sending Rf12 ACK"));
+					dbglnF(" Sending Rf12 ACK");
 					rf12_sendStart(RF12_ACK_REPLY, 0,0,1);
 				}
 			//rf12_recvDone();
@@ -195,140 +202,140 @@ void MQTTSN::parse_rf12() {
 #ifdef USE_LPL_RF69
 void MQTTSN::parse_lpl_rf69() {
     //flashLed(9,50);
-    DbgSer.println(F(" mqttsn-messages::parse_lpl_rf69: >>> "));
-    DbgSer.print(F(" mqttsn-messages::parse_lpl_rf69: radio.receiveDone()= "));
-    DbgSer.println(radio.receiveDone());
-    
+    //dbgln(F(" mqttsn-messages::parse_lpl_rf69: >>> "));
+    //dbg(F(" mqttsn-messages::parse_lpl_rf69: radio.receiveDone()= "));
+    //dbgln(radio.receiveDone());
+    //dbg(F(" mqttsn-messages::parse_lpl_rf69: RSSI= "));
+    //dbgln(radio.readRSSI());
     if(radio.receiveDone()){
-        DbgSer.print(F(" mqttsn-messages::parse_lpl_rf69: recvDone()=1"));
-        //DbgSer.print(F(" mqttsn-messages::parse_lpl_rf69: rf69 data = "));
+        //dbg(F(" mqttsn-messages::parse_lpl_rf69: recvDone()=1"));
+        //dbg(F(" mqttsn-messages::parse_lpl_rf69: rf69 data = "));
         //for (int i=0;i<rf12_len;i++){
-        //  DbgSer.print(rf12_data[i],HEX);
-        //  DbgSer.print(F(" "));
+        //  dbg(rf12_data[i],HEX);
+        //  dbg(F(" "));
         //}
-        //DbgSer.println(F(" "));
-        //if(rf12_crc == 0 ){
-            //DbgSer.println(F(" mqttsn-messages::parse_rf12: crc free RF data received! "));
-            DbgSer.print(F(" mqttsn-messages::parse_rf69: rf69 data = "));
+        //dbgln(F(" "));
+        doubleFlashLed(9, 30);
+            //dbgln(F(" mqttsn-messages::parse_rf12: crc free RF data received! "));
+            dbgF(" mqttsn-messages::parse_rf69: rf69 data = ");
             for (int i=0;i<radio.DATALEN;i++){
-                DbgSer.print(radio.DATA[i],HEX);
-                DbgSer.print(F(" "));
+                dbgH(radio.DATA[i],HEX);
+                dbgF(" ");
             }
-            DbgSer.println(F(" "));
+            dbglnF(" ");
           //memcpy(response_buffer, (const void*)radio.DATA, radio.RF69_MAX_DATA_LEN < MAX_BUFFER_SIZE ? radio.RF69_MAX_DATA_LEN : MAX_BUFFER_SIZE);
             memcpy(response_buffer, (const void*)radio.DATA, 61);//< MAX_BUFFER_SIZE ? radio.RF69_MAX_DATA_LEN : MAX_BUFFER_SIZE);
             if (radio.ACKRequested()){
                 byte theNodeID = radio.SENDERID;
                 radio.sendACK();
-                DbgSer.println(F(" Sending Rf69 ACK"));
+                dbglnF(" mqttsn-messages::parse_lpl_rf69: Sending Rf69 ACK");
                 }
             dispatch();
-        //}
     }
 }
 
 void MQTTSN::setRadioArgs(byte freqBand, byte ID, byte networkID, const char* encryptKey){
-    DbgSer.println(F("mqttsn-messages:Initialising RF69...")); 
+    dbglnF("mqttsn-messages:Initialising RF69..."); 
     radio.initialize(freqBand, ID, networkID);
     radio.encrypt(encryptKey);
-    DbgSer.println(F("mqttsn-messages:RF69 init done")); 
+    dbglnF("mqttsn-messages:RF69 init done"); 
 }
 #endif
 
 void MQTTSN::dispatch() {
     message_header* response_message = (message_header*)response_buffer;
-	DbgSer.print(F("mqttsn-messages:dispatch: response_msg len="));
-	DbgSer.println(response_message->length);
-	DbgSer.print(F("mqttsn-messages:dispatch: response_msg type= "));
-	DbgSer.println(response_message->type,HEX);
-	//DbgSer.print(F("mqttsn-messages:dispatch: response_buffer= "));
+	dbgF("mqttsn-messages:dispatch: response_msg len=");
+	dbgln(response_message->length);
+	dbgF("mqttsn-messages:dispatch: response_msg type= ");
+	dbglnH(response_message->type,HEX);
+	//dbg(F("mqttsn-messages:dispatch: response_buffer= "));
 	//for (int i=0;i<response_message->length;i++){
-	//	DbgSer.print(response_buffer[i],HEX);
-	//	DbgSer.print(F(" "));
+	//	dbg(response_buffer[i],HEX);
+	//	dbg(F(" "));
 	//}
-	//DbgSer.println("");
-	//DbgSer.print("mqttsn-messages:dispatch: response_buffer=");
+	//dbgln("");
+	//dbg("mqttsn-messages:dispatch: response_buffer=");
 	//printByteA(response_buffer);
 	//doubleFlashLed(13,500);
     
     switch (response_message->type) {
     case ADVERTISE:
-		DbgSer.println(F("mqttsn-messages:dispatch: advertiseHandler"));
+		dbglnF("mqttsn-messages:dispatch: advertiseHandler");
         advertise_handler((msg_advertise*)response_buffer);
         break;
 
     case GWINFO:
-		DbgSer.println(F("mqttsn-messages:dispatch: gwinfoHandler"));
+		dbglnF("mqttsn-messages:dispatch: gwinfoHandler");
         gwinfo_handler((msg_gwinfo*)response_buffer);
         break;
 
     case CONNACK:
-		DbgSer.println(F("mqttsn-messages:dispatch: connackHandler"));
+		dbglnF("mqttsn-messages:dispatch: connackHandler");
         connack_handler((msg_connack*)response_buffer);
         break;
 
     case WILLTOPICREQ:
-		DbgSer.println(F("mqttsn-messages:dispatch: willtopicHandler"));
+		dbglnF("mqttsn-messages:dispatch: willtopicHandler");
         willtopicreq_handler(response_message);
         break;
 
     case WILLMSGREQ:
-		DbgSer.println(F("mqttsn-messages:dispatch: willMsgHandler"));
+		dbglnF("mqttsn-messages:dispatch: willMsgHandler");
         willmsgreq_handler(response_message);
         break;
 
     case REGISTER:
-		DbgSer.println(F("mqttsn-messages:dispatch: registerHandler"));
+		dbglnF("mqttsn-messages:dispatch: registerHandler");
         register_handler((msg_register*)response_buffer);
         break;
 
     case REGACK:
-		DbgSer.println(F("mqttsn-messages:dispatch: regackHandler"));
+		dbglnF("mqttsn-messages:dispatch: regackHandler");
         regack_handler((msg_regack*)response_buffer);
         break;
 
     case PUBLISH:
-		DbgSer.println(F("mqttsn-messages:dispatch: publishHandler"));
+		dbglnF("mqttsn-messages:dispatch: publishHandler");
         publish_handler((msg_publish*)response_buffer);
         break;
 
     case PUBACK:
-		DbgSer.println(F("mqttsn-messages:dispatch: pubackHandler"));
+		dbglnF("mqttsn-messages:dispatch: pubackHandler");
         puback_handler((msg_puback*)response_buffer);
         break;
 
     case SUBACK:
-		DbgSer.println(F("mqttsn-messages:dispatch: subackHandler"));
+		dbglnF("mqttsn-messages:dispatch: subackHandler");
         suback_handler((msg_suback*)response_buffer);
         break;
 
     case UNSUBACK:
-		DbgSer.println(F("mqttsn-messages:dispatch: unsubackHandler"));
+		dbglnF("mqttsn-messages:dispatch: unsubackHandler");
         unsuback_handler((msg_unsuback*)response_buffer);
         break;
 
     case PINGREQ:
-		DbgSer.println(F("mqttsn-messages:dispatch: pinreqHandler"));
+		dbglnF("mqttsn-messages:dispatch: pinreqHandler");
         pingreq_handler((msg_pingreq*)response_buffer);
         break;
 
     case PINGRESP:
-		DbgSer.println(F("mqttsn-messages:dispatch: pingrespHandler"));
+		dbglnF("mqttsn-messages:dispatch: pingrespHandler");
         pingresp_handler();
         break;
 
     case DISCONNECT:
-		DbgSer.println(F("mqttsn-messages:dispatch: disconnectHandler"));
+		dbglnF("mqttsn-messages:dispatch: disconnectHandler");
         disconnect_handler((msg_disconnect*)response_buffer);
         break;
 
     case WILLTOPICRESP:
-		DbgSer.println(F("mqttsn-messages:dispatch: willtopicrespHandler"));
+		dbglnF("mqttsn-messages:dispatch: willtopicrespHandler");
         willtopicresp_handler((msg_willtopicresp*)response_buffer);
         break;
 
     case WILLMSGRESP:
-		DbgSer.println(F("mqttsn-messages:dispatch: willmsgrespHandler"));
+		dbglnF("mqttsn-messages:dispatch: willmsgrespHandler");
         willmsgresp_handler((msg_willmsgresp*)response_buffer);
         break;
 
@@ -343,34 +350,37 @@ void MQTTSN::send_message() {
 #ifdef USE_LPL_RF69
    //int i=0;
    // while (!radio.canSend()){//} && i<10) {
-        //DbgSer.print(F("mqttsn-messages:send_message:radio.canSend() = "));
-        //DbgSer.print(radio.canSend());
-        //DbgSer.print(F("."));
+        //dbg(F("mqttsn-messages:send_message:radio.canSend() = "));
+        //dbg(radio.canSend());
+        //dbg(F("."));
         //rf12_recvDone();
         //i++;
         //delay(32);
         //doubleFlashLed(9,50);
     //}
-    //DbgSer.println(F(" "));
+    dbgF("mqttsn-messages:send_message: Sending to [");
+    dbg(_gateway_id);
+    dbgF("]");
     radio.sendWithRetry(_gateway_id, message_buffer, hdr->length);
+    dbglnF("..sent");
     //rf12_sendWait(2);
     //rf12_sleep(RF12_SLEEP);
-    doubleFlashLed(9, 30);
+    //doubleFlashLed(9, 30);
 #endif
 
 #ifdef USE_RF12
 	//rf12_sleep(RF12_WAKEUP);
    int i=0;
     while (!rf12_canSend() && i<10) {
-        //DbgSer.print(F("mqttsn-messages:advertise_handler: rf12_canSend() = "));
-		//DbgSer.print(rf12_canSend());
-		//DbgSer.print(F(" "));
+        //dbg(F("mqttsn-messages:advertise_handler: rf12_canSend() = "));
+		//dbg(rf12_canSend());
+		//dbg(F(" "));
         rf12_recvDone();
         i++;
-        delay(32);
+        delay(slow);
         //Sleepy::loseSomeTime(32);
     }
-    //DbgSer.println(F(" "));
+    //dbgln(F(" "));
     rf12_sendStart(_gateway_id, message_buffer, hdr->length);
     rf12_sendWait(2);
     //rf12_sleep(RF12_SLEEP);
@@ -390,13 +400,15 @@ void MQTTSN::send_message() {
 
         // Cheesy hack to ensure two messages don't run-on into one send.
         delay_(20);
+    }else{
+        waiting_for_response=wait_for_response();
     }
 }
 
 void MQTTSN::advertise_handler(const msg_advertise* msg) {
     _gateway_id = msg->gw_id;
-    DbgSer.print(F("mqttsn-messages:advertise_handler: _gateway_id="));
-    DbgSer.println(_gateway_id);
+    dbgF("mqttsn-messages:advertise_handler: _gateway_id=");
+    dbgln(_gateway_id);
 }
 
 //extern void MQTTSN_gwinfo_handler(const msg_gwinfo* msg);
@@ -406,7 +418,7 @@ void MQTTSN::gwinfo_handler(const msg_gwinfo* msg) {
 
 void MQTTSN::connack_handler(const msg_connack* msg) {
 	_connected = 1;
-	DbgSer.println(F("mqttsn-messages:connack_handler: _connected=1"));
+	dbglnF("mqttsn-messages:connack_handler: _connected=1");
 }
 
 void MQTTSN::willtopicreq_handler(const message_header* msg) {
@@ -443,22 +455,22 @@ void MQTTSN::pingreq_handler(const msg_pingreq* msg) {
 }
 
 void MQTTSN::suback_handler(const msg_suback* msg) {
-	//DbgSer.println(F("MQTTSN:subackhandler: ...")); 
+	//dbgln(F("MQTTSN:subackhandler: ...")); 
 	//Need to have returned topic id stored in the topic_table
-	//DbgSer.print("mqttsn-messages:suback_handler: msg->message_id=");
-    //DbgSer.println(bswap(msg->message_id));
-    //DbgSer.print("mqttsn-messages:suback_handler: _message_id=");
-    //DbgSer.println(_message_id);
+	//dbg("mqttsn-messages:suback_handler: msg->message_id=");
+    //dbgln(bswap(msg->message_id));
+    //dbg("mqttsn-messages:suback_handler: _message_id=");
+    //dbgln(_message_id);
 	if (msg->return_code == 0 && topic_count < MAX_TOPICS && bswap(msg->message_id) == _message_id) {
 	topic_table[topic_count].id = bswap(msg->topic_id);
-	DbgSer.print(F("mqttsn-messages:suback_handler: topicTable["));
-    DbgSer.print(topic_count);
-    DbgSer.print(F("].name="));
-	DbgSer.println(topic_table[topic_count].name);
-	DbgSer.print(F("mqttsn-messages:suback_handler: topicTable["));
-    DbgSer.print(topic_count);
-    DbgSer.print(F("].id="));
-	DbgSer.println(topic_table[topic_count].id);
+	dbgF("mqttsn-messages:suback_handler: topicTable[");
+    dbg(topic_count);
+    dbgF("].name=");
+	dbgln(topic_table[topic_count].name);
+	dbgF("mqttsn-messages:suback_handler: topicTable[");
+    dbg(topic_count);
+    dbgF("].id=");
+	dbgln(topic_table[topic_count].id);
 	++topic_count;
 	_subscribed=1;
 	}
@@ -469,6 +481,9 @@ void MQTTSN::unsuback_handler(const msg_unsuback* msg) {
 
 void MQTTSN::disconnect_handler(const msg_disconnect* msg) {
 	_connected = false;
+    //lock up here and let the watchdog reset mcu to start sync over
+    dbgF("mqttsn-messages:disconnect_handler: LOCKING UP for watchdog reset!!!");
+    while(true){}
 }
 
 void MQTTSN::pingresp_handler(){
@@ -476,7 +491,7 @@ void MQTTSN::pingresp_handler(){
 
 //extern void MQTTSN_publish_handler(const msg_publish* msg);
 void MQTTSN::publish_handler(const msg_publish* msg) {
-	//DbgSer.println(F("Mmqttsn-messages::publishhandler: ..."));  
+	//dbgln(F("Mmqttsn-messages::publishhandler: ..."));  
     if (msg->flags & FLAG_QOS_1) {
         return_code_t ret = REJECTED_INVALID_TOPIC_ID;
         const uint16_t topic_id = bswap(msg->topic_id);
@@ -493,18 +508,18 @@ void MQTTSN::publish_handler(const msg_publish* msg) {
 				char paylo[payloLength];
 				memcpy(paylo, msg->data, payloLength);
 				
-				//DbgSer.print(F("mqttsn-messages:publish_handler: msg->length="));
-				//DbgSer.println(msg->length);
-				//DbgSer.print(F("mqttsn-messages:publish_handler: sizeof(msg_publish)="));
-				//DbgSer.println(sizeof(msg_publish));
-				//DbgSer.print(F("mqttsn-messages:publish_handler: sizeofCharA(paylo)="));
-				//DbgSer.println(sizeofCharA(paylo));
+				//dbg(F("mqttsn-messages:publish_handler: msg->length="));
+				//dbgln(msg->length);
+				//dbg(F("mqttsn-messages:publish_handler: sizeof(msg_publish)="));
+				//dbgln(sizeof(msg_publish));
+				//dbg(F("mqttsn-messages:publish_handler: sizeofCharA(paylo)="));
+				//dbgln(sizeofCharA(paylo));
 			
-				//DbgSer.print(F("mqttsn-messages:publish_handler: payload="));
-				//DbgSer.println(paylo);//msg->data);
-				//DbgSer.print(F("mqttsn-messages:publish_handler: payloadLength="));
-				//DbgSer.println(payloLength);//sizeofCharA(const_cast<char*>(msg->data)));
-				DbgSer.println(F("mqttsn-messages:publish_handler: <<<ACTION Callback>>>"));
+				//dbg(F("mqttsn-messages:publish_handler: payload="));
+				//dbgln(paylo);//msg->data);
+				//dbg(F("mqttsn-messages:publish_handler: payloadLength="));
+				//dbgln(payloLength);//sizeofCharA(const_cast<char*>(msg->data)));
+				dbglnF("mqttsn-messages:publish_handler: <<<ACTION Callback>>>");
 				PrePubCallback(topic_table[i].name, paylo);//msg->data);
                 break;
             }
@@ -514,13 +529,13 @@ void MQTTSN::publish_handler(const msg_publish* msg) {
     }
     
 	const uint16_t topic_id = bswap(msg->topic_id);
-	//DbgSer.print(F("mqttsn-messages:publish_handler: msg->topic_count="));
-	//DbgSer.println(topic_count);
+	//dbg(F("mqttsn-messages:publish_handler: msg->topic_count="));
+	//dbgln(topic_count);
 	for (uint8_t i = 0; i < topic_count; ++i) {
-		//DbgSer.print(F("mqttsn-messages:publish_handler: topicId="));
-		//DbgSer.println(topic_table[i].id);
-		//DbgSer.print(F("mqttsn-messages:publish_handler: topicName="));
-		//DbgSer.println(topic_table[i].name);
+		//dbg(F("mqttsn-messages:publish_handler: topicId="));
+		//dbgln(topic_table[i].id);
+		//dbg(F("mqttsn-messages:publish_handler: topicName="));
+		//dbgln(topic_table[i].name);
 		if (topic_table[i].id == topic_id) {
 			//MQTTSN_publish_handler(msg);
 			///The payload is variable length!! We have to use the 
@@ -529,21 +544,21 @@ void MQTTSN::publish_handler(const msg_publish* msg) {
 			uint8_t paylLength = msg->length - sizeof(msg_publish);
 			char payl[paylLength];
 			memcpy(payl, msg->data,paylLength);
-			DbgSer.print(F("mqttsn-messages:publish_handler: msg->length="));
-			DbgSer.println(msg->length);
-			DbgSer.print(F("mqttsn-messages:publish_handler: sizeof(msg_publish)="));
-			DbgSer.println(sizeof(msg_publish));
-			DbgSer.print(F("mqttsn-messages:publish_handler: paylLength="));
-			DbgSer.println(paylLength);
+			dbgF("mqttsn-messages:publish_handler: msg->length=");
+			dbgln(msg->length);
+			dbgF("mqttsn-messages:publish_handler: sizeof(msg_publish)=");
+			dbgln(sizeof(msg_publish));
+			dbgF("mqttsn-messages:publish_handler: paylLength=");
+			dbgln(paylLength);
 			///sizeofCharA is looking for null termination - which isnt in the msg->data
-			//DbgSer.print(F("mqttsn-messages:publish_handler: printf(payl)="));
-			//DbgSer.printf("%.*s", paylLength,payl);
+			//dbg(F("mqttsn-messages:publish_handler: printf(payl)="));
+			//dbgf("%.*s", paylLength,payl);
 			
-			//DbgSer.print(F("mqttsn-messages:publish_handler: payload="));
-			//DbgSer.println((String(payl)).toInt());//msg->data);
-			//DbgSer.print(F("mqttsn-messages:publish_handler: payloadLength="));
-			//DbgSer.println(paylLength);//sizeofCharA(const_cast<char*>(msg->data)));
-			DbgSer.println(F("mqttsn-messages:publish_handler: <<<ACTION Callback>>>"));
+			//dbg(F("mqttsn-messages:publish_handler: payload="));
+			//dbgln((String(payl)).toInt());//msg->data);
+			//dbg(F("mqttsn-messages:publish_handler: payloadLength="));
+			//dbgln(paylLength);//sizeofCharA(const_cast<char*>(msg->data)));
+			dbglnF("mqttsn-messages:publish_handler: <<<ACTION Callback>>>");
 			PrePubCallback(topic_table[i].name, payl);//msg->data);
 			break;
 		}
@@ -761,14 +776,14 @@ void MQTTSN::subscribe_by_name(const uint8_t flags, const char* topic_name) {
     //strcpy(const_cast<char*>(topic_table[topic_count].name),topic_name);
     
     topic_table[topic_count].id = 0xffff;
-    DbgSer.print("mqttsn-messages:subscribe_by_name: topicTable[");
-    DbgSer.print(topic_count);
-    DbgSer.print("].name=");
-	DbgSer.println(topic_table[topic_count].name);
-	DbgSer.print("mqttsn-messages:subscribe_by_name: topicTable[");
-    DbgSer.print(topic_count);
-    DbgSer.print("].id=");
-	DbgSer.println(topic_table[topic_count].id);
+    dbgF("mqttsn-messages:subscribe_by_name: topicTable[");
+    dbg(topic_count);
+    dbgF("].name=");
+	dbgln(topic_table[topic_count].name);
+	dbgF("mqttsn-messages:subscribe_by_name: topicTable[");
+    dbg(topic_count);
+    dbgF("].id=");
+	dbgln(topic_table[topic_count].id);
 	
     //if ((flags & QOS_MASK) == FLAG_QOS_1 || (flags & QOS_MASK) == FLAG_QOS_2) {
     //    waiting_for_response = true;
@@ -857,17 +872,17 @@ void MQTTSN::printByteA(volatile uint8_t* data){
     String str = String(cha);
     int len = cha[0];
     
-    //DbgSer.print(F("cha[0]="));
-    //DbgSer.println(cha[0],DEC);
-    //DbgSer.print(F("len="));
-    //DbgSer.println(len);
+    //dbg(F("cha[0]="));
+    //dbgln(cha[0],DEC);
+    //dbg(F("len="));
+    //dbgln(len);
     
     for(int j=0;j<len;j++){
-        DbgSer.print(F("["));
-        DbgSer.print(data[j],HEX);
-        DbgSer.print(F("]"));
+        dbgF("[");
+        dbgH(data[j],HEX);
+        dbgF("]");
     }
-    DbgSer.println(F(""));
+    dbglnF("");
 }
 void MQTTSN::flashLed(int pinid, int ms){
     digitalWrite(pinid, HIGH);
@@ -876,7 +891,7 @@ void MQTTSN::flashLed(int pinid, int ms){
 }
 void MQTTSN::doubleFlashLed(int pinid, int ms){
 	flashLed(pinid,ms);
-	delay(2*ms);
+	delay(ms);
 	flashLed(pinid,ms);
     delay(2*ms);
 }
@@ -925,25 +940,26 @@ int MQTTSN::sizeofCharA(char *ptr){
 
 void MQTTSN::connect_(uint8_t flagz,uint16_t kat, char* clientid){
   connect(flagz, kat, clientid);
-  DbgSer.println(F("Connect msg sent "));
-  //delay_(slow);
+  dbglnF("Connect msg sent ");
+  delay_(slow);
   poll();
-  DbgSer.print(F("mqttsn.connected()="));
-  DbgSer.println(connected());
+  dbgF("mqttsn.connected()=");
+  dbgln(connected());
 }
 
 void MQTTSN::registertopic_(char* topPub){
   uint8_t index;
   uint16_t topicPubId;
   topicPubId = find_topic_id(topPub, &index);
-  //DbgSer.print("TopicPubID: ");
-  //DbgSer.println(u16TopicPubID);
+  //dbg("TopicPubID: ");
+  //dbgln(u16TopicPubID);
   if (topicPubId == 0xffff)
   {
      //Topic is not registered yet
      register_topic(topPub); 
-     DbgSer.println(F("Register topic sent"));  
-     //delay_(slow);
+     dbgF("Register topic sent for: "); 
+     dbgln(topPub);  
+     delay_(slow);
      poll();  //for regack
      _registered=0;
   }
@@ -956,18 +972,19 @@ void MQTTSN::subscribe_(char* topic, uint8_t flags){
     uint8_t index;
     uint16_t topicSubId;
     topicSubId = find_topic_id(topic, &index);
-    //DbgSer.print(F("TopicSubID: "));
-    //DbgSer.println(u16TopicSubID);
+    //dbg(F("TopicSubID: "));
+    //dbgln(u16TopicSubID);
     if (topicSubId == 0xffff && !waiting_for_response) 
     {
       // Topic is not registered yet
       subscribe_by_name(flags, topic);  // Flags=0x20   
-      DbgSer.println(F("Subscribe by name sent")); 
+      dbglnF("Subscribe by name sent"); 
       _subscribed=0;
+      delay_(slow);
       poll();  
     } 
     
-    //delay_(slow);
+    
     
 }
 
@@ -978,17 +995,17 @@ void MQTTSN::publish_(char* topic,char* payload, int payloadLength, uint8_t flag
   if(connected()){
 	  if(topicId!=0xffff){
 		//Topic Registered >> now publish  
-		  //DbgSer.println("Publishing: ");
-		  //DbgSer.print("Topic name="); 
-		  //DbgSer.print(topic);
-		  //DbgSer.print("    Topic id=");
-		  //DbgSer.print(topicId);
-		  //DbgSer.print("    Payload="); 
-		  //DbgSer.println(payload);
+		  //dbgln("Publishing: ");
+		  //dbg("Topic name="); 
+		  //dbg(topic);
+		  //dbg("    Topic id=");
+		  //dbg(topicId);
+		  //dbg("    Payload="); 
+		  //dbgln(payload);
 		  publish(flags, topicId, payload, payloadLength);  // Flags=0x20         
 	  }else{
 		//TOPIC NOT REGISTERED - REGISTER
-		DbgSer.println("topic not registered...registering... ");
+		dbglnF("topic not registered...registering... ");
 		registertopic_(topic);
 		delay_(slow);
 		poll();
@@ -998,10 +1015,10 @@ void MQTTSN::publish_(char* topic,char* payload, int payloadLength, uint8_t flag
 		}
 		} 
    }else{
-	   DbgSer.println(F("Cant publish before connecting....")); 
+	   dbglnF("Cant publish before connecting...."); 
 	  //skech main loop should retry the connection, so no need to do it here   
     }
-    //delay_(slow);
+    delay_(slow);
     poll();
 }
 
@@ -1009,3 +1026,31 @@ void MQTTSN::delay_(uint16_t ms){
 	delay(ms);
 }
 
+byte MilliTimer::poll(word ms) {
+    byte ready = 0;
+    if (armed) {
+        word remain = next - millis();
+        // since remain is unsigned, it will overflow to large values when
+        // the timeout is reached, so this test works as long as poll() is
+        // called no later than 5535 millisecs after the timer has expired
+        if (remain <= 60000)
+            return 0;
+        // return a value between 1 and 255, being msecs+1 past expiration
+        // note: the actual return value is only reliable if poll() is
+        // called no later than 255 millisecs after the timer has expired
+        ready = -remain;
+    }
+    set(ms);
+    return ready;
+}
+
+word MilliTimer::remaining() const {
+    word remain = armed ? next - millis() : 0;
+    return remain <= 60000 ? remain : 0;
+}
+
+void MilliTimer::set(word ms) {
+    armed = ms != 0;
+    if (armed)
+        next = millis() + ms - 1;
+}
