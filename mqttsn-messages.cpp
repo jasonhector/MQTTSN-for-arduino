@@ -28,7 +28,7 @@ THE SOFTWARE.
 //for use with Jeelib's RF12 radios
 //#define USE_RF12 1
 //for use with LowPowerLab's RF69 radios
-#define USE_LPL_RF69 1
+//#define USE_LPL_RF69 1
 //#include <Arduino.h>
 
 #include "mqttsn-messages.h"
@@ -201,6 +201,7 @@ void MQTTSN::parse_rf12() {
 
 #ifdef USE_LPL_RF69
 void MQTTSN::parse_lpl_rf69() {
+
     //flashLed(9,50);
     //dbgln(F(" mqttsn-messages::parse_lpl_rf69: >>> "));
     //dbg(F(" mqttsn-messages::parse_lpl_rf69: radio.receiveDone()= "));
@@ -215,26 +216,42 @@ void MQTTSN::parse_lpl_rf69() {
         //  dbg(F(" "));
         //}
         //dbgln(F(" "));
-        doubleFlashLed(9, 30);
-            //dbgln(F(" mqttsn-messages::parse_rf12: crc free RF data received! "));
+
+    if (radio.ACKRequested()){
+        byte theNodeID = radio.SENDERID;
+        radio.sendACK();
+        dbglnF(" mqttsn-messages::parse_lpl_rf69: Sending Rf69 ACK");
+        }
+        
+    dbglnF("<<<-------------------->>>");
+    for (int i=0;i<=topic_count;i++){
+        dbgF("topicTable[");
+        dbg(i);
+        dbgF("].id.name=");
+        dbg(topic_table[i].id);
+        dbgF(" ");
+        dbgln(topic_table[i].name);
+    }
+    dbglnF("<<<-------------------->>>");
+
+        
+            
             dbgF(" mqttsn-messages::parse_rf69: rf69 data = ");
             for (int i=0;i<radio.DATALEN;i++){
                 dbgH(radio.DATA[i],HEX);
                 dbgF(" ");
             }
             dbglnF(" ");
+            
           //memcpy(response_buffer, (const void*)radio.DATA, radio.RF69_MAX_DATA_LEN < MAX_BUFFER_SIZE ? radio.RF69_MAX_DATA_LEN : MAX_BUFFER_SIZE);
             memcpy(response_buffer, (const void*)radio.DATA, 61);//< MAX_BUFFER_SIZE ? radio.RF69_MAX_DATA_LEN : MAX_BUFFER_SIZE);
-            if (radio.ACKRequested()){
-                byte theNodeID = radio.SENDERID;
-                radio.sendACK();
-                dbglnF(" mqttsn-messages::parse_lpl_rf69: Sending Rf69 ACK");
-                }
+
+            doubleFlashLed(9, 10);
             dispatch();
     }
 }
 
-void MQTTSN::setRadioArgs(byte freqBand, byte ID, byte networkID, const char* encryptKey){
+void MQTTSN::setRadioArgs(byte freqBand, byte ID, byte networkID, char* encryptKey){
     dbglnF("mqttsn-messages:Initialising RF69..."); 
     radio.initialize(freqBand, ID, networkID);
     radio.encrypt(encryptKey);
@@ -244,10 +261,10 @@ void MQTTSN::setRadioArgs(byte freqBand, byte ID, byte networkID, const char* en
 
 void MQTTSN::dispatch() {
     message_header* response_message = (message_header*)response_buffer;
-	dbgF("mqttsn-messages:dispatch: response_msg len=");
-	dbgln(response_message->length);
-	dbgF("mqttsn-messages:dispatch: response_msg type= ");
-	dbglnH(response_message->type,HEX);
+	//dbgF("mqttsn-messages:dispatch: response_msg len=");
+	//dbgln(response_message->length);
+	//dbgF("mqttsn-messages:dispatch: response_msg type= ");
+	//dbglnH(response_message->type,HEX);
 	//dbg(F("mqttsn-messages:dispatch: response_buffer= "));
 	//for (int i=0;i<response_message->length;i++){
 	//	dbg(response_buffer[i],HEX);
@@ -358,6 +375,18 @@ void MQTTSN::send_message() {
         //delay(32);
         //doubleFlashLed(9,50);
     //}
+
+    dbglnF("<<<<<<<-------------------->>>>>>>");
+    for (int i=0;i<=topic_count;i++){
+        dbgF("topicTable[");
+        dbg(i);
+        dbgF("].id.name=");
+        dbg(topic_table[i].id);
+        dbgF(" ");
+        dbgln(topic_table[i].name);
+    }
+    dbglnF("<<<<<<<-------------------->>>>>>>");
+
     dbgF("mqttsn-messages:send_message: Sending to [");
     dbg(_gateway_id);
     dbgF("]");
@@ -504,10 +533,12 @@ void MQTTSN::publish_handler(const msg_publish* msg) {
 				///The payload is variable length!! We have to use the 
 				///msg->len to determine how much of the msg->data to copy
 				///and send to PrePubCallback
+                //also to append null terminator
 				uint8_t payloLength = msg->length - sizeof(msg_publish);
-				char paylo[payloLength];
-				memcpy(paylo, msg->data, payloLength);
-				
+				char paylo[payloLength+1];
+				//memcpy(paylo, msg->data, payloLength);
+				strncpy(paylo,msg->data,payloLength);
+                paylo[payloLength]='\0';
 				//dbg(F("mqttsn-messages:publish_handler: msg->length="));
 				//dbgln(msg->length);
 				//dbg(F("mqttsn-messages:publish_handler: sizeof(msg_publish)="));
@@ -520,7 +551,7 @@ void MQTTSN::publish_handler(const msg_publish* msg) {
 				//dbg(F("mqttsn-messages:publish_handler: payloadLength="));
 				//dbgln(payloLength);//sizeofCharA(const_cast<char*>(msg->data)));
 				dbglnF("mqttsn-messages:publish_handler: <<<ACTION Callback>>>");
-				PrePubCallback(topic_table[i].name, paylo);//msg->data);
+				PrePubCallback(i, paylo);//msg->data);
                 break;
             }
         }
@@ -542,24 +573,29 @@ void MQTTSN::publish_handler(const msg_publish* msg) {
 			///msg->len to determine how much of the msg->data to copy
 			///and send to PrePubCallback
 			uint8_t paylLength = msg->length - sizeof(msg_publish);
-			char payl[paylLength];
-			memcpy(payl, msg->data,paylLength);
-			dbgF("mqttsn-messages:publish_handler: msg->length=");
-			dbgln(msg->length);
-			dbgF("mqttsn-messages:publish_handler: sizeof(msg_publish)=");
-			dbgln(sizeof(msg_publish));
-			dbgF("mqttsn-messages:publish_handler: paylLength=");
-			dbgln(paylLength);
+			char payl[paylLength+1];
+			//memcpy(payl, msg->data,paylLength);
+            strncpy(payl,msg->data,paylLength);
+            payl[paylLength]='\0';
+
+			//dbgF("mqttsn-messages:publish_handler: msg->length=");
+			//dbgln(msg->length);
+			//dbgF("mqttsn-messages:publish_handler: sizeof(msg_publish)=");
+			//dbgln(sizeof(msg_publish));
+			//dbgF("mqttsn-messages:publish_handler: paylLength=");
+			//dbgln(paylLength);
 			///sizeofCharA is looking for null termination - which isnt in the msg->data
 			//dbg(F("mqttsn-messages:publish_handler: printf(payl)="));
 			//dbgf("%.*s", paylLength,payl);
 			
-			//dbg(F("mqttsn-messages:publish_handler: payload="));
-			//dbgln((String(payl)).toInt());//msg->data);
+            dbgF("mqttsn-messages:publish_handler: topic=");
+            dbgln(topic_table[i].name);
+			dbgF("mqttsn-messages:publish_handler: payload=");
+			dbgln(payl);
 			//dbg(F("mqttsn-messages:publish_handler: payloadLength="));
 			//dbgln(paylLength);//sizeofCharA(const_cast<char*>(msg->data)));
 			dbglnF("mqttsn-messages:publish_handler: <<<ACTION Callback>>>");
-			PrePubCallback(topic_table[i].name, payl);//msg->data);
+			PrePubCallback(i, payl);//msg->data);
 			break;
 		}
 	}
@@ -662,7 +698,9 @@ bool MQTTSN::register_topic(const char* name) {
         // Fill in the next table entry, but we only increment the counter to
         // the next topic when we get a REGACK from the broker. So don't issue
         // another REGISTER until we have resolved this one.
-        topic_table[topic_count].name = name;
+        
+        //topic_table[topic_count].name = name;
+        strcpy(topic_table[topic_count].name,name);
         topic_table[topic_count].id = 0xffff;
 
         msg_register* msg = reinterpret_cast<msg_register*>(message_buffer);
@@ -771,8 +809,8 @@ void MQTTSN::subscribe_by_name(const uint8_t flags, const char* topic_name) {
     // the next topic when we get a SUBACK from the broker. So don't issue
     // another SUB until we have resolved this one.
     
-    topic_table[topic_count].name = topic_name;
-    //strcpy(topic_table[topic_count].name,topic_name);
+    //topic_table[topic_count].name = topic_name;
+    strcpy(topic_table[topic_count].name,topic_name);
     //strcpy(const_cast<char*>(topic_table[topic_count].name),topic_name);
     
     topic_table[topic_count].id = 0xffff;
@@ -780,10 +818,10 @@ void MQTTSN::subscribe_by_name(const uint8_t flags, const char* topic_name) {
     dbg(topic_count);
     dbgF("].name=");
 	dbgln(topic_table[topic_count].name);
-	dbgF("mqttsn-messages:subscribe_by_name: topicTable[");
-    dbg(topic_count);
-    dbgF("].id=");
-	dbgln(topic_table[topic_count].id);
+	//dbgF("mqttsn-messages:subscribe_by_name: topicTable[");
+    //dbg(topic_count);
+    //dbgF("].id=");
+	//dbgln(topic_table[topic_count].id);
 	
     //if ((flags & QOS_MASK) == FLAG_QOS_1 || (flags & QOS_MASK) == FLAG_QOS_2) {
     //    waiting_for_response = true;
@@ -866,7 +904,7 @@ void MQTTSN::pingresp() {
 
     send_message();
 }
-
+/*
 void MQTTSN::printByteA(volatile uint8_t* data){
     char* cha = (char*)data;
     String str = String(cha);
@@ -884,6 +922,7 @@ void MQTTSN::printByteA(volatile uint8_t* data){
     }
     dbglnF("");
 }
+*/
 void MQTTSN::flashLed(int pinid, int ms){
     digitalWrite(pinid, HIGH);
     delay(ms);
@@ -901,20 +940,26 @@ void MQTTSN::setCallback(mqttsnPubHandlerCallbackT callback)
   this->callback = callback;
 }
 
-void MQTTSN::PrePubCallback (const char* topic,const char* payload){
+void MQTTSN::PrePubCallback (const uint16_t topicId,const char* payload){
 	//This function is used to copy the char* and send the copied char* as args into the callback
 	//this helps to prevent modification of the char* pointers in this library by external code
 	//copy the char arrays
-	uint8_t topicSize = sizeofCharA(const_cast<char*>(topic));
-	uint8_t payloadSize = sizeofCharA(const_cast<char*>(payload));
-	char copiedTopic[topicSize+1];
-	char copiedPayload[payloadSize+1];
-	memcpy(copiedTopic, topic, topicSize+1);
-	memcpy(copiedPayload, payload, payloadSize+1);
+	//uint8_t topicSize = sizeofCharA(const_cast<char*>(topic));
+	//uint8_t payloadSize = sizeofCharA(const_cast<char*>(payload));
+	//char copiedTopic[topicSize+1];
+	//char copiedPayload[payloadSize+1];
+	//memcpy(copiedTopic, topic, topicSize+1);
+	//memcpy(copiedPayload, payload, payloadSize+1);
 	//call the callback
-	callback(copiedTopic, copiedPayload);
+	//callback(copiedTopic, copiedPayload);
+    char localTopic[TOPIC_LENGTH];
+    char localPayload[PAYLOAD_LENGTH];
+    strcpy(localTopic, topic_table[topicId].name);
+    strcpy(localPayload, payload);
+    callback(localTopic, localPayload);
 }
 
+/*
 //returns the size of a character array using a pointer to the first element of the character array
 int MQTTSN::sizeofCharA(char *ptr){
     //variable used to access the subsequent array elements.
@@ -932,7 +977,7 @@ int MQTTSN::sizeofCharA(char *ptr){
     //return the size of the array
     return count;
 }
-
+*/
 //int MQTTSN::my_putc( char c, FILE *t) {
 //  DbgSer.write( c );
 //}
@@ -980,15 +1025,15 @@ void MQTTSN::subscribe_(char* topic, uint8_t flags){
       subscribe_by_name(flags, topic);  // Flags=0x20   
       dbglnF("Subscribe by name sent"); 
       _subscribed=0;
-      delay_(slow);
-      poll();  
+      //delay_(slow);
+      //poll();  
     } 
     
     
     
 }
 
-void MQTTSN::publish_(char* topic,char* payload, int payloadLength, uint8_t flags){
+void MQTTSN::publish_(char* topic,char* payload, uint8_t flags){
   uint8_t index;
   uint16_t topicId = find_topic_id(topic, &index); 
   //CHECK IF CONNECTED and TOPIC REGISTERED - ONLY PUB THEN
@@ -1002,7 +1047,7 @@ void MQTTSN::publish_(char* topic,char* payload, int payloadLength, uint8_t flag
 		  //dbg(topicId);
 		  //dbg("    Payload="); 
 		  //dbgln(payload);
-		  publish(flags, topicId, payload, payloadLength);  // Flags=0x20         
+		  publish(flags, topicId, payload, strlen(payload));  // Flags=0x20         
 	  }else{
 		//TOPIC NOT REGISTERED - REGISTER
 		dbglnF("topic not registered...registering... ");
@@ -1011,7 +1056,7 @@ void MQTTSN::publish_(char* topic,char* payload, int payloadLength, uint8_t flag
 		poll();
 		//should now be registered- then publish
 		if(registered()){
-			publish(flags, topicId, payload, payloadLength);  // Flags=0x20  
+			publish(flags, topicId, payload, strlen(payload));  // Flags=0x20  
 		}
 		} 
    }else{

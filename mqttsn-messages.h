@@ -33,10 +33,11 @@ THE SOFTWARE.
 //#include "SoftwareSerial.h"
 #ifdef USE_LPL_RF69
     #include "SPI.h"
-    #include "SPIFlash.h"
+    //#include "SPIFlash.h"
     #include "RFM69.h"
 #endif
 
+//#define USE_DBG_NONE
 //#define USE_DBG_SOFT
 #define USE_DBG_UART
 
@@ -52,13 +53,6 @@ THE SOFTWARE.
   #define dbglnH(input, hex){DbgSer.println(input, hex); delay(1);}
   #define dbgF(input)   {DbgSer.print(F(input)); delay(1);}
   #define dbglnF(input) {DbgSer.println(F(input)); delay(1);}
-#else
-  #define dbg(input);
-  #define dbgln(input);
-  #define dbgF(input);
-  #define dbglnF(input);
-  #define dbgH(input,hex);
-  #define dbglnH(input,hex);
 #endif
 #ifdef USE_DBG_UART
   #define dbg(input)   {Serial.print(input); delay(1);}
@@ -67,7 +61,8 @@ THE SOFTWARE.
   #define dbglnH(input, hex){Serial.println(input, hex); delay(1);}
   #define dbgF(input)   {Serial.print(F(input)); delay(1);}
   #define dbglnF(input) {Serial.println(F(input)); delay(1);}
-#else
+#endif
+#ifdef USE_DBG_NONE
   #define dbg(input);
   #define dbgln(input);
   #define dbgF(input);
@@ -78,10 +73,12 @@ THE SOFTWARE.
 
 
 //typedef void (*mqttsnMessagesCallbackT) (uint8_t* response);
-typedef void (*mqttsnPubHandlerCallbackT) (const char* topic,const char* payload);
+typedef void (*mqttsnPubHandlerCallbackT) (char* topic,char* payload);
 
-#define MAX_TOPICS 20
+#define MAX_TOPICS 15		//20
 #define MAX_BUFFER_SIZE 66
+#define TOPIC_LENGTH  15		//31
+#define PAYLOAD_LENGTH  31		//31
 
 class MQTTSN {
 public:
@@ -93,7 +90,7 @@ public:
 	bool connected();
 	bool subscribed();
 	bool registered();
-	void PrePubCallback (const char* topic,const char* payload);
+	void PrePubCallback (const uint16_t topicId,const char* payload);
 	void setCallback(mqttsnPubHandlerCallbackT callback);
 	void poll();
 	void delay_(uint16_t ms);
@@ -106,7 +103,7 @@ public:
 #endif
 #ifdef USE_LPL_RF69
     void parse_lpl_rf69();
-    void setRadioArgs(byte freqBand, byte ID, byte networkID, const char* encryptKey);
+    void setRadioArgs(byte freqBand, byte ID, byte networkID, char* encryptKey);
 #endif
     void searchgw(const uint8_t radius);
     void connect(const uint8_t flags, const uint16_t duration, const char* client_id);
@@ -138,7 +135,7 @@ public:
     void connect_(uint8_t flagz,uint16_t kat, char* clientid);
     void registertopic_(char* topPub);
     void subscribe_(char* topic, uint8_t flags);
-	void publish_(char* topic,char* payload, int payloadLength, uint8_t flags);	
+	void publish_(char* topic,char* payload, uint8_t flags);	
 protected:
 
 	bool waiting_for_response;
@@ -174,12 +171,12 @@ protected:
 
     void regack(const uint16_t topic_id, const uint16_t message_id, const return_code_t return_code);
     void puback(const uint16_t topic_id, const uint16_t message_id, const return_code_t return_code);
-	int sizeofCharA(char *ptr);
+	//int sizeofCharA(char *ptr);
     
     
 private:
     struct topic {
-        const char* name;
+        char name[TOPIC_LENGTH];		//-4];
         uint16_t id;
     };
 
